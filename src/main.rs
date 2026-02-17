@@ -3,7 +3,7 @@ use std::fs;
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
-    let version = "1.0.0";
+    let version = "1.1";
     let base_url = "https://UDTool.delphigamerz.xyz";
 
     println!("UDTool v{version} by Ari Cummings");
