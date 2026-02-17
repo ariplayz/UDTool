@@ -53,7 +53,13 @@ fn main() -> std::io::Result<()> {
             println!("Search failed with status: {}", res.status());
         }
     }
-
+    else {
+        println!("Invalid operator: {operator}");
+        println!("Usage:");
+        println!("  upload <file_path>   - Upload a file");
+        println!("  download <file_name> - Download a file");
+        println!("  search <query>       - Search for files");
+    }
 
 
     Ok(())
