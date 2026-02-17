@@ -14,7 +14,7 @@ fn main() -> std::io::Result<()> {
 
     if operator == "upload" || operator == "Upload" {
         println!("Uploading {file_name}...");
-        let _res = client.post("https://UDTool.delphigamerz.xyz/{file_name}")
+        let _res = client.post(&format!("https://UDTool.delphigamerz.xyz/{file_name}"))
             .body(file_contents)
             .send()
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
@@ -23,13 +23,35 @@ fn main() -> std::io::Result<()> {
     }
     else if operator == "download" || operator == "Download" {
         println!("Downloading {file_name}...");
-        let _res = client.get("https://UDTool.delphigamerz.xyz/{file_name}")
+        let _res = client.get(&format!("https://UDTool.delphigamerz.xyz/{file_name}"))
             .send()
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         println!("Downloaded {file_name}...");
 
         let content = _res.text().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         fs::write(&args[2], content)?;
+    }
+    else if operator == "search" || operator == "Search" {
+        println!("Searching for {file_name}...");
+        let res = client.get(&format!("https://UDTool.delphigamerz.xyz/search/{file_name}"))
+            .send()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+        if res.status().is_success() {
+            let files: Vec<String> = res.json()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+            if files.is_empty() {
+                println!("No files found matching '{file_name}'.");
+            } else {
+                println!("Found {} file(s):", files.len());
+                for file in files {
+                    println!("  - {}", file);
+                }
+            }
+        } else {
+            println!("Search failed with status: {}", res.status());
+        }
     }
 
 
