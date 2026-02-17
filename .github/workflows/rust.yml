@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-linux-windows:
     name: Build for ${{ matrix.target }}
     runs-on: ubuntu-latest
     strategy:
@@ -21,12 +21,6 @@ jobs:
           
           - target: x86_64-pc-windows-gnu
             output: UDTool-windows-x86_64.exe
-          
-          - target: x86_64-apple-darwin
-            output: UDTool-macos-x86_64
-          
-          - target: aarch64-apple-darwin
-            output: UDTool-macos-aarch64
 
     steps:
     - name: Checkout code
@@ -55,9 +49,42 @@ jobs:
         name: ${{ matrix.output }}
         path: ${{ matrix.output }}
 
+  build-macos:
+    name: Build for ${{ matrix.target }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            output: UDTool-macos-x86_64
+          
+          - target: aarch64-apple-darwin
+            output: UDTool-macos-aarch64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Build
+      run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Rename binary
+      run: mv target/${{ matrix.target }}/release/UDTool ${{ matrix.output }}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.output }}
+        path: ${{ matrix.output }}
+
   release:
     name: Create Release
-    needs: build
+    needs: [build-linux-windows, build-macos]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     
