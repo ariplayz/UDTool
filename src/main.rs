@@ -6,6 +6,7 @@ fn main() -> std::io::Result<()> {
     let operator = &args[1];
     let file_contents = fs::read(&args[2])?;
     let file_name = &args[2];
+    let target_name = &args[3];
     let version = "1.0.0";
     let client = reqwest::blocking::Client::new();
 
@@ -14,12 +15,12 @@ fn main() -> std::io::Result<()> {
 
     if operator == "upload" || operator == "Upload" {
         println!("Uploading {file_name}...");
-        let _res = client.post(&format!("https://UDTool.delphigamerz.xyz/{file_name}"))
+        let _res = client.post(&format!("https://UDTool.delphigamerz.xyz/{target_name}"))
             .body(file_contents)
             .send()
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         println!("File successfully uploaded.");
-        println!("File URL: https://UDTool.delphigamerz.xyz/{file_name}");
+        println!("File URL: https://UDTool.delphigamerz.xyz/{target_name}");
     }
     else if operator == "download" || operator == "Download" {
         println!("Downloading {file_name}...");
@@ -56,7 +57,7 @@ fn main() -> std::io::Result<()> {
     else {
         println!("Invalid operator: {operator}");
         println!("Usage:");
-        println!("  upload <file_path>   - Upload a file");
+        println!("  upload <file_path> <target_name>   - Upload a file");
         println!("  download <file_name> - Download a file");
         println!("  search <query>       - Search for files");
     }
