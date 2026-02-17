@@ -7,7 +7,6 @@ fn main() -> std::io::Result<()> {
     let file_contents = fs::read(&args[2])?;
     let file_name = &args[2];
     let version = "1.0.0";
-
     let client = reqwest::blocking::Client::new();
 
     println!("UDTool v{version} by Ari Cummings");
