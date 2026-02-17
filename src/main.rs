@@ -3,7 +3,7 @@ use std::fs;
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
-    let version = "1.1";
+    let version = "1.0";
     let base_url = "https://UDTool.delphigamerz.xyz";
 
     println!("UDTool v{version} by Ari Cummings");
@@ -12,9 +12,11 @@ fn main() -> std::io::Result<()> {
     if args.len() < 2 {
         println!("Invalid operator");
         println!("Usage:");
-        println!("  upload <file_path> <target_name>   - Upload a file");
-        println!("  download <file_name> <target_name> - Download a file");
+        println!("  upload <file_path> <target_name>    - Upload a file");
+        println!("  download <file_name>                - Download a file");
         println!("  search <query>                      - Search for files");
+        println!("  delete <file_name>                  - Delete a file");
+        println!("  list                                - List all files");
         return Ok(());
     }
 
@@ -56,12 +58,11 @@ fn main() -> std::io::Result<()> {
         }
     }
     else if operator == "download" || operator == "Download" {
-        if args.len() < 4 {
-            println!("Usage: download <file_name> <target_name>");
+        if args.len() < 3 {
+            println!("Usage: download <file_name>");
             return Ok(());
         }
         let file_name = &args[2];
-        let target_name = &args[3];
 
         println!("Downloading {file_name}...");
         let res = client.get(&format!("{base_url}/{file_name}"))
@@ -71,7 +72,7 @@ fn main() -> std::io::Result<()> {
         let status = res.status();
         if status.is_success() {
             let content = res.bytes().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-            fs::write(target_name, &content)?;
+            fs::write(file_name, &content)?;
             println!("Downloaded {file_name}...");
         } else {
             let body = res.text().unwrap_or_default();
@@ -169,7 +170,7 @@ fn main() -> std::io::Result<()> {
         println!("Invalid operator: {operator}");
         println!("Usage:");
         println!("  upload <file_path> <target_name>    - Upload a file");
-        println!("  download <file_name> <target_name>  - Download a file");
+        println!("  download <file_name>                - Download a file");
         println!("  search <query>                      - Search for files");
         println!("  delete <file_name>                  - Delete a file");
         println!("  list                                - List all files");
