@@ -4,6 +4,7 @@ use std::fs;
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let version = "1.0.0";
+    let base_url = "https://UDTool.delphigamerz.xyz";
 
     println!("UDTool v{version} by Ari Cummings");
     println!();
@@ -18,7 +19,10 @@ fn main() -> std::io::Result<()> {
     }
 
     let operator = &args[1];
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
     if operator == "upload" || operator == "Upload" {
         if args.len() < 4 {
@@ -30,12 +34,26 @@ fn main() -> std::io::Result<()> {
         let file_contents = fs::read(file_name)?;
 
         println!("Uploading {file_name}...");
-        let _res = client.post(&format!("https://UDTool.delphigamerz.xyz/{target_name}"))
-            .body(file_contents)
+        let part = reqwest::blocking::multipart::Part::bytes(file_contents)
+            .file_name(target_name.to_string())
+            .mime_str("application/octet-stream")
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let form = reqwest::blocking::multipart::Form::new().part("file", part);
+        let res = client.post(&format!("{base_url}/{target_name}"))
+            .multipart(form)
             .send()
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        println!("File successfully uploaded.");
-        println!("File URL: https://UDTool.delphigamerz.xyz/{target_name}");
+        let status = res.status();
+        if status.is_success() {
+            println!("File successfully uploaded.");
+            println!("File URL: {base_url}/{target_name}");
+        } else {
+            let body = res.text().unwrap_or_default();
+            println!("Upload failed with status: {status}");
+            if !body.is_empty() {
+                println!("Server response: {body}");
+            }
+        }
     }
     else if operator == "download" || operator == "Download" {
         if args.len() < 4 {
@@ -46,13 +64,22 @@ fn main() -> std::io::Result<()> {
         let target_name = &args[3];
 
         println!("Downloading {file_name}...");
-        let _res = client.get(&format!("https://UDTool.delphigamerz.xyz/{file_name}"))
+        let res = client.get(&format!("{base_url}/{file_name}"))
             .send()
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        println!("Downloaded {file_name}...");
 
-        let content = _res.text().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        fs::write(target_name, content)?;
+        let status = res.status();
+        if status.is_success() {
+            let content = res.bytes().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            fs::write(target_name, &content)?;
+            println!("Downloaded {file_name}...");
+        } else {
+            let body = res.text().unwrap_or_default();
+            println!("Download failed with status: {status}");
+            if !body.is_empty() {
+                println!("Server response: {body}");
+            }
+        }
     }
     else if operator == "search" || operator == "Search" {
         if args.len() < 3 {
@@ -62,11 +89,12 @@ fn main() -> std::io::Result<()> {
         let query = &args[2];
 
         println!("Searching for {query}...");
-        let res = client.get(&format!("https://UDTool.delphigamerz.xyz/search/{query}"))
+        let res = client.get(&format!("{base_url}/search/{query}"))
             .send()
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-        if res.status().is_success() {
+        let status = res.status();
+        if status.is_success() {
             let files: Vec<String> = res.json()
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
@@ -79,7 +107,11 @@ fn main() -> std::io::Result<()> {
                 }
             }
         } else {
-            println!("Search failed with status: {}", res.status());
+            let body = res.text().unwrap_or_default();
+            println!("Search failed with status: {status}");
+            if !body.is_empty() {
+                println!("Server response: {body}");
+            }
         }
     }
     else {
