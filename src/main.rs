@@ -114,12 +114,65 @@ fn main() -> std::io::Result<()> {
             }
         }
     }
+    else if operator == "delete" || operator == "Delete" {
+        if args.len() < 3 {
+            println!("Usage: delete <file_name>");
+            return Ok(());
+        }
+        let file_name = &args[2];
+
+        println!("Deleting {file_name}...");
+        let res = client.delete(&format!("{base_url}/{file_name}"))
+            .send()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+        let status = res.status();
+        if status.is_success() {
+            println!("File '{file_name}' successfully deleted.");
+        } else {
+            let body = res.text().unwrap_or_default();
+            println!("Delete failed with status: {status}");
+            if !body.is_empty() {
+                println!("Server response: {body}");
+            }
+        }
+
+    }
+    else if operator == "list" || operator == "List" {
+        println!("Listing all files...");
+        let res = client.get(&format!("{base_url}/list"))
+            .send()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+        let status = res.status();
+        if status.is_success() {
+            let files: Vec<String> = res.json()
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+            if files.is_empty() {
+                println!("No files found.");
+            } else {
+                println!("Files:");
+                for file in files {
+                    println!("  - {}", file);
+                }
+            }
+        } else {
+            let body = res.text().unwrap_or_default();
+            println!("List failed with status: {status}");
+            if !body.is_empty() {
+                println!("Server response: {body}");
+            }
+        }
+    }
     else {
         println!("Invalid operator: {operator}");
         println!("Usage:");
-        println!("  upload <file_path> <target_name>   - Upload a file");
-        println!("  download <file_name> <target_name> - Download a file");
+        println!("  upload <file_path> <target_name>    - Upload a file");
+        println!("  download <file_name> <target_name>  - Download a file");
         println!("  search <query>                      - Search for files");
+        println!("  delete <file_name>                  - Delete a file");
+        println!("  list                                - List all files");
     }
 
 
