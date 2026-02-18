@@ -48,6 +48,12 @@ jobs:
           cargo install cargo-deb cargo-rpm
           sudo apt-get install -y ruby-dev > /dev/null 2>&1 || true
           sudo gem install fpm > /dev/null 2>&1 || true
+          
+          # Install OpenSSL dev libraries for cross-compilation
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            sudo apt-get install -y libssl-dev:arm64 > /dev/null 2>&1 || true
+            sudo apt-get install -y libssl-dev > /dev/null 2>&1 || true
+          fi
 
       - name: Build DEB package
         run: |
@@ -179,8 +185,11 @@ jobs:
 
       - name: Build MSI installer (WiX)
         run: |
-          # Install WiX Toolset v4 (recommended over v3)
+          # Install WiX Toolset v4+ (as dotnet global tool)
           dotnet tool install --global wix
+          
+          # Install WiX extensions
+          dotnet tool run wix extension add WixToolset.UI.wixext/5.0.0 2>/dev/null || true
           
           # Extract version
           $version = "${{ github.ref_name }}" -replace 'v', ''
@@ -188,7 +197,10 @@ jobs:
             $version = "1.0.0"
           }
           
-          # Build MSI using wix command (from dotnet tools)
+          # Create release directory
+          New-Item -ItemType Directory -Path release -Force -ErrorAction SilentlyContinue | Out-Null
+          
+          # Build MSI
           wix build wix\main.wxs `
             -d Version="$version" `
             -d CargoTargetBinDir=target\${{ matrix.target }}\release `
