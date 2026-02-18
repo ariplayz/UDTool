@@ -142,6 +142,8 @@ fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str, a
     Ok(())
 }
 
+
+
 fn download(args: &[String], client: &reqwest::blocking::Client, base_url: &str, api_key: &str) -> std::io::Result<()> {
     if args.len() < 3 {
         println!("Usage: download <file_name>");
