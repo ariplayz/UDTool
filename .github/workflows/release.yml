@@ -1,4 +1,4 @@
-﻿name: Release Build
+﻿﻿name: Release Build
 
 permissions:
   contents: write
@@ -7,6 +7,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   # Build Linux binaries and packages
