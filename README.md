@@ -1,4 +1,4 @@
-﻿# UDTool - Universal Data Tool
+﻿﻿# UDTool - Universal Data Tool
 
 A command-line tool written in Rust for managing files on a remote server with API key authentication.
 
@@ -37,20 +37,36 @@ A command-line tool written in Rust for managing files on a remote server with A
 
 ### Windows (MSI Installer - Recommended)
 
-1. Download `UDTool-1.0.0.msi` from [Releases](https://github.com/ariplayz/UDTool/releases)
+1. Download `UDTool-VERSION-x64.msi` or `UDTool-VERSION-arm64.msi` from [Releases](https://github.com/ariplayz/UDTool/releases)
 2. Double-click and follow the installer
 3. Command available: `UDTool list`
 
 ### macOS (PKG Installer - Recommended)
 
-1. Download `UDTool-1.0.0.pkg` from [Releases](https://github.com/ariplayz/UDTool/releases)
+1. Download `UDTool-VERSION.pkg` from [Releases](https://github.com/ariplayz/UDTool/releases)
 2. Double-click and follow the installer
 3. Binary installed to: `/usr/local/bin/UDTool`
 4. Open a new Terminal and run: `UDTool list`
 
+### Linux (DEB or RPM - Recommended)
+
+**Debian/Ubuntu:**
+```bash
+wget https://github.com/ariplayz/UDTool/releases/download/v1.0.0/UDTool-linux-x64.deb
+sudo dpkg -i UDTool-linux-x64.deb
+UDTool list
+```
+
+**RHEL/CentOS/Fedora:**
+```bash
+wget https://github.com/ariplayz/UDTool/releases/download/v1.0.0/UDTool-linux-x64.rpm
+sudo rpm -i UDTool-linux-x64.rpm
+UDTool list
+```
+
 ### Linux/macOS (Binary)
 
-1. Download `UDTool-linux-x86_64` or `UDTool-macos` from [Releases](https://github.com/ariplayz/UDTool/releases)
+1. Download `UDTool-linux-x64`, `UDTool-linux-arm64`, `UDTool-macos-x64`, or `UDTool-macos-arm64` from [Releases](https://github.com/ariplayz/UDTool/releases)
 2. Make executable: `chmod +x UDTool-*`
 3. Add to PATH: `sudo mv UDTool-* /usr/local/bin/UDTool`
 
@@ -63,21 +79,29 @@ cargo build --release
 ./target/release/UDTool list
 ```
 
-### Build Installers
-
-**macOS PKG:**
-```bash
-chmod +x create-macos-pkg.sh
-./create-macos-pkg.sh
-```
-
-**Windows MSI:** (Requires WiX Toolset)
-```powershell
-cargo build --release
-wix build wix\main.wxs -d Version=1.0.0 -d CargoTargetBinDir=target\release -ext WixToolset.UI.wixext -o target\wix\udtool.msi
-```
-
 ---
+
+## Automated Release Process
+
+Simply push a version tag and GitHub Actions will automatically:
+
+```bash
+git tag v1.0.0
+git push origin main --tags
+```
+
+**All builds happen automatically:**
+- ✅ Linux x64 & ARM64 executables
+- ✅ Linux x64 & ARM64 DEB packages
+- ✅ Linux x64 & ARM64 RPM packages
+- ✅ macOS x64 & ARM64 executables
+- ✅ macOS universal executable
+- ✅ macOS PKG installer
+- ✅ Windows x64 & ARM64 executables
+- ✅ Windows x64 & ARM64 MSI installers
+- ✅ SHA256 checksums for all files
+
+All files are uploaded to GitHub Releases automatically.
 
 ## Configuration
 
