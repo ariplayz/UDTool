@@ -1,4 +1,4 @@
-﻿﻿# UDTool - Universal Data Tool
+# Universal Data Tool
 
 A command-line tool written in Rust for managing files on a remote server with API key authentication.
 
