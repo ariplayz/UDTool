@@ -1,0 +1,115 @@
+﻿name: macOS PKG Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-macos-pkg:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+          override: true
+
+      - name: Build Universal Binary
+        run: |
+          cargo build --release --target=x86_64-apple-darwin
+          cargo build --release --target=aarch64-apple-darwin
+          
+          lipo -create \
+            target/x86_64-apple-darwin/release/UDTool \
+            target/aarch64-apple-darwin/release/UDTool \
+            -output target/release/UDTool-universal
+
+      - name: Create PKG Installer
+        run: |
+          # Setup staging directory
+          mkdir -p pkg_staging/usr/local/bin
+          
+          # Copy binary
+          cp target/release/UDTool-universal pkg_staging/usr/local/bin/UDTool
+          chmod 755 pkg_staging/usr/local/bin/UDTool
+          
+          # Create scripts directory
+          mkdir -p pkg_scripts
+          cat > pkg_scripts/postinstall << 'POSTINSTALL_EOF'
+          #!/bin/bash
+          echo "UDTool installed successfully!"
+          echo "Binary location: /usr/local/bin/UDTool"
+          POSTINSTALL_EOF
+          chmod +x pkg_scripts/postinstall
+          
+          # Create PKG
+          pkgbuild --root pkg_staging \
+            --scripts pkg_scripts \
+            --identifier "com.aricummings.udtool" \
+            --version ${GITHUB_REF#refs/tags/v} \
+            --install-location "/" \
+            UDTool-${GITHUB_REF#refs/tags/}.pkg
+          
+          # Generate checksum
+          shasum -a 256 UDTool-${GITHUB_REF#refs/tags/}.pkg > UDTool-${GITHUB_REF#refs/tags/}.pkg.sha256
+          
+          # Cleanup
+          rm -rf pkg_staging pkg_scripts
+
+      - name: Upload PKG to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            UDTool-*.pkg
+            UDTool-*.pkg.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-unknown-linux-gnu
+          override: true
+
+      - name: Build UDTool
+        run: cargo build --release --target=x86_64-unknown-linux-gnu
+
+      - name: Upload Binary to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            target/x86_64-unknown-linux-gnu/release/UDTool
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build UDTool
+        run: cargo build --release
+
+      - name: Upload Binary to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/release/UDTool.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
