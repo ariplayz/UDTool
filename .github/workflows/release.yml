@@ -51,14 +51,21 @@ jobs:
           
           # Install OpenSSL dev libraries for cross-compilation
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            sudo apt-get install -y libssl-dev:arm64 > /dev/null 2>&1 || true
-            sudo apt-get install -y libssl-dev > /dev/null 2>&1 || true
+            sudo apt-get install -y \
+              aarch64-linux-gnu-gcc \
+              aarch64-linux-gnu-g++ \
+              libssl-dev \
+              libssl-dev:arm64 > /dev/null 2>&1 || true
           fi
 
       - name: Build DEB package
         run: |
           mkdir -p release
           cargo deb --target ${{ matrix.target }} --output release/
+        env:
+          OPENSSL_DIR: /usr
+          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
+          OPENSSL_INCLUDE_DIR: /usr/include
 
       - name: Build RPM package
         run: |
@@ -74,6 +81,10 @@ jobs:
               --maintainer "Ari Cummings <ari@aricummings.com>" \
               --description "Universal Data Tool - Manage files on remote server" 2>/dev/null || true
           fi
+        env:
+          OPENSSL_DIR: /usr
+          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
+          OPENSSL_INCLUDE_DIR: /usr/include
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -185,11 +196,21 @@ jobs:
 
       - name: Build MSI installer (WiX)
         run: |
-          # Install WiX Toolset v4+ (as dotnet global tool)
+          # Download and install WiX v6 directly
+          choco install wixtoolset -y --force --no-progress
+          
+          # Alternative: Direct download if choco fails
+          # Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix/releases/download/v6.0.2/wix-cli-x64.msi" -OutFile wix-cli.msi
+          # msiexec /i wix-cli.msi /quiet /norestart
+          
+          # Install dotnet tool for wix
           dotnet tool install --global wix
           
-          # Install WiX extensions
-          dotnet tool run wix extension add WixToolset.UI.wixext/5.0.0 2>/dev/null || true
+          # Install extension using PowerShell proper syntax
+          $output = (dotnet tool run wix extension add WixToolset.UI.wixext/5.0.0) 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Warning: Extension install returned non-zero, but continuing..."
+          }
           
           # Extract version
           $version = "${{ github.ref_name }}" -replace 'v', ''
