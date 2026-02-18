@@ -7,4 +7,5 @@ authors = ["Ari Cummings <ari@aricummings.com>"]
 
 
 [dependencies]
+dirs = "6.0.0"
 reqwest = { version = "0.12", features = ["blocking", "json", "multipart"] }
