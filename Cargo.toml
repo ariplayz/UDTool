@@ -3,6 +3,8 @@ name = "UDTool"
 version = "1.0.0"
 edition = "2024"
 authors = ["Ari Cummings <ari@aricummings.com>"]
+license = "MIT"
+description = "Universal Data Tool - Manage files on remote server with API key authentication"
 
 
 

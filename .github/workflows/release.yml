@@ -45,27 +45,28 @@ jobs:
       - name: Install build tools for DEB/RPM
         run: |
           sudo apt-get update
-          cargo install cargo-deb
-          cargo install cargo-rpm
+          cargo install cargo-deb cargo-rpm
+          sudo apt-get install -y ruby-dev > /dev/null 2>&1 || true
+          sudo gem install fpm > /dev/null 2>&1 || true
+
       - name: Build DEB package
         run: |
-          cargo install cargo-deb
-          cargo deb --target ${{ matrix.target }} -- --release -o release/
+          mkdir -p release
+          cargo deb --target ${{ matrix.target }} --output release/
 
       - name: Build RPM package
         run: |
-          cargo install cargo-rpm
-          cargo rpm build --target ${{ matrix.target }} -- --release 2>/dev/null || true
+          mkdir -p release
+          cargo rpm build --target ${{ matrix.target }} --output release/ 2>/dev/null || true
           # Fallback: Create RPM manually if cargo-rpm fails
           if [ ! -f release/*.rpm ]; then
             mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
             mkdir -p rpmroot/usr/local/bin
             cp target/${{ matrix.target }}/release/UDTool rpmroot/usr/local/bin/
-            cargo install fpm 2>/dev/null || sudo apt-get install -y ruby-dev && sudo gem install fpm || true
             fpm -s dir -t rpm -n udtool -v 1.0.0 \
               -C rpmroot -o release/ \
               --maintainer "Ari Cummings <ari@aricummings.com>" \
-              --description "Universal Data Tool - Manage files on remote server" || true
+              --description "Universal Data Tool - Manage files on remote server" 2>/dev/null || true
           fi
 
       - name: Upload artifacts
@@ -178,11 +179,8 @@ jobs:
 
       - name: Build MSI installer (WiX)
         run: |
-          # Install WiX Toolset
-          choco install wixtoolset -y --no-progress
-          
-          # Set PATH to include WiX
-          $env:PATH = "C:\Program Files (x86)\WiX Toolset v3.14\bin;$env:PATH"
+          # Install WiX Toolset v4 (recommended over v3)
+          dotnet tool install --global wix
           
           # Extract version
           $version = "${{ github.ref_name }}" -replace 'v', ''
@@ -190,14 +188,7 @@ jobs:
             $version = "1.0.0"
           }
           
-          # Verify wix is available
-          $wixTest = Get-Command wix -ErrorAction SilentlyContinue
-          if (-not $wixTest) {
-            Write-Error "WiX command not found after installation"
-            exit 1
-          }
-          
-          # Build MSI
+          # Build MSI using wix command (from dotnet tools)
           wix build wix\main.wxs `
             -d Version="$version" `
             -d CargoTargetBinDir=target\${{ matrix.target }}\release `
