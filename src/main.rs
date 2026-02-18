@@ -1,8 +1,106 @@
 use std::env;
 use std::fs;
+use std::path::PathBuf;
 
+fn get_api_key_file() -> PathBuf {
+    if let Some(data_dir) = dirs::config_dir() {
+        data_dir.join("UDTool").join("api_key.txt")
+    } else {
+        PathBuf::from("api_key.txt")
+    }
+}
 
-fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -> std::io::Result<()> {
+fn load_api_key() -> std::io::Result<String> {
+    let api_key_file = get_api_key_file();
+    if api_key_file.exists() {
+        let key = fs::read_to_string(&api_key_file)?;
+        Ok(key.trim().to_string())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "API key not found. Use 'genkey' command to generate a new key.",
+        ))
+    }
+}
+
+fn save_api_key(key: &str) -> std::io::Result<()> {
+    let api_key_file = get_api_key_file();
+    if let Some(parent) = api_key_file.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&api_key_file, key)?;
+    Ok(())
+}
+
+fn check_key(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -> std::io::Result<()> {
+    if args.len() < 3 {
+        println!("Usage: checkkey <api_key>");
+        return Ok(());
+    }
+    let key = &args[2];
+
+    println!("Checking API key...");
+    let res = client
+        .get(&format!("{base_url}/key/check/{key}"))
+        .send()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    let status = res.status();
+    if status.is_success() {
+        match res.json::<serde_json::Value>() {
+            Ok(json) => {
+                if let Some(message) = json.get("message").and_then(|m| m.as_str()) {
+                    println!("{}", message);
+                    if message == "Key is valid." {
+                        save_api_key(key)?;
+                        println!("API key saved successfully.");
+                    }
+                }
+            }
+            Err(_) => println!("Could not parse response."),
+        }
+    } else {
+        let body = res.text().unwrap_or_default();
+        println!("Check failed with status: {status}");
+        if !body.is_empty() {
+            println!("Server response: {body}");
+        }
+    }
+    Ok(())
+}
+
+fn generate_key(client: &reqwest::blocking::Client, base_url: &str) -> std::io::Result<()> {
+    println!("Generating new API key...");
+    let res = client
+        .post(&format!("{base_url}/key/new"))
+        .send()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    let status = res.status();
+    if status.is_success() {
+        match res.json::<serde_json::Value>() {
+            Ok(json) => {
+                if let Some(key) = json.get("key").and_then(|k| k.as_str()) {
+                    println!("New API key generated: {key}");
+                    save_api_key(key)?;
+                    println!("API key saved successfully.");
+                } else {
+                    println!("Could not extract key from response.");
+                }
+            }
+            Err(_) => println!("Could not parse response."),
+        }
+    } else {
+        let body = res.text().unwrap_or_default();
+        println!("Key generation failed with status: {status}");
+        if !body.is_empty() {
+            println!("Server response: {body}");
+        }
+    }
+    Ok(())
+}
+
+fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str, api_key: &str) -> std::io::Result<()> {
     if args.len() < 4 {
         println!("Usage: upload <file_path> <target_name>");
         return Ok(());
@@ -17,7 +115,9 @@ fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -
         .mime_str("application/octet-stream")
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
     let form = reqwest::blocking::multipart::Form::new().part("file", part);
-    let res = client.post(&format!("{base_url}/{target_name}"))
+    let res = client
+        .post(&format!("{base_url}/{target_name}"))
+        .header("API-Key", api_key)
         .multipart(form)
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
@@ -35,7 +135,7 @@ fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -
     Ok(())
 }
 
-fn download(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -> std::io::Result<()> {
+fn download(args: &[String], client: &reqwest::blocking::Client, base_url: &str, api_key: &str) -> std::io::Result<()> {
     if args.len() < 3 {
         println!("Usage: download <file_name>");
         return Ok(());
@@ -43,7 +143,9 @@ fn download(args: &[String], client: &reqwest::blocking::Client, base_url: &str)
     let file_name = &args[2];
 
     println!("Downloading {file_name}...");
-    let res = client.get(&format!("{base_url}/{file_name}"))
+    let res = client
+        .get(&format!("{base_url}/{file_name}"))
+        .header("API-Key", api_key)
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
@@ -62,7 +164,7 @@ fn download(args: &[String], client: &reqwest::blocking::Client, base_url: &str)
     Ok(())
 }
 
-fn search(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -> std::io::Result<()> {
+fn search(args: &[String], client: &reqwest::blocking::Client, base_url: &str, api_key: &str) -> std::io::Result<()> {
     if args.len() < 3 {
         println!("Usage: search <query>");
         return Ok(());
@@ -70,7 +172,9 @@ fn search(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -
     let query = &args[2];
 
     println!("Searching for {query}...");
-    let res = client.get(&format!("{base_url}/search/{query}"))
+    let res = client
+        .get(&format!("{base_url}/search/{query}"))
+        .header("API-Key", api_key)
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
@@ -97,7 +201,7 @@ fn search(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -
     Ok(())
 }
 
-fn delete(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -> std::io::Result<()> {
+fn delete(args: &[String], client: &reqwest::blocking::Client, base_url: &str, api_key: &str) -> std::io::Result<()> {
     if args.len() < 3 {
         println!("Usage: delete <file_name>");
         return Ok(());
@@ -105,7 +209,9 @@ fn delete(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -
     let file_name = &args[2];
 
     println!("Deleting {file_name}...");
-    let res = client.delete(&format!("{base_url}/{file_name}"))
+    let res = client
+        .delete(&format!("{base_url}/{file_name}"))
+        .header("API-Key", api_key)
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
@@ -122,9 +228,11 @@ fn delete(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -
     Ok(())
 }
 
-fn list_files(client: &reqwest::blocking::Client, base_url: &str) -> std::io::Result<()> {
+fn list_files(client: &reqwest::blocking::Client, base_url: &str, api_key: &str) -> std::io::Result<()> {
     println!("Listing all files...");
-    let res = client.get(&format!("{base_url}/list"))
+    let res = client
+        .get(&format!("{base_url}/list"))
+        .header("API-Key", api_key)
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
@@ -162,12 +270,7 @@ fn main() -> std::io::Result<()> {
 
     if args.len() < 2 {
         println!("Invalid operator");
-        println!("Usage:");
-        println!("  upload <file_path> <target_name>    - Upload a file");
-        println!("  download <file_name>                - Download a file");
-        println!("  search <query>                      - Search for files");
-        println!("  delete <file_name>                  - Delete a file");
-        println!("  list                                - List all files");
+        print_usage();
         return Ok(());
     }
 
@@ -178,22 +281,35 @@ fn main() -> std::io::Result<()> {
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
     match operator.as_str().to_lowercase().as_str() {
-        "upload" => upload(&args, &client, base_url)?,
-        "download" => download(&args, &client, base_url)?,
-        "search" => search(&args, &client, base_url)?,
-        "delete" => delete(&args, &client, base_url)?,
-        "list" => list_files(&client, base_url)?,
+        "genkey" => generate_key(&client, base_url)?,
+        "checkkey" => check_key(&args, &client, base_url)?,
+        "upload" | "download" | "search" | "delete" | "list" => {
+            let api_key = load_api_key()?;
+            match operator.as_str().to_lowercase().as_str() {
+                "upload" => upload(&args, &client, base_url, &api_key)?,
+                "download" => download(&args, &client, base_url, &api_key)?,
+                "search" => search(&args, &client, base_url, &api_key)?,
+                "delete" => delete(&args, &client, base_url, &api_key)?,
+                "list" => list_files(&client, base_url, &api_key)?,
+                _ => {} // Should never reach here
+            }
+        }
         _ => {
             println!("Invalid operator: {operator}");
-            println!("Usage:");
-            println!("  upload <file_path> <target_name>    - Upload a file");
-            println!("  download <file_name>                - Download a file");
-            println!("  search <query>                      - Search for files");
-            println!("  delete <file_name>                  - Delete a file");
-            println!("  list                                - List all files");
+            print_usage();
         }
     }
 
-
     Ok(())
+}
+
+fn print_usage() {
+    println!("Usage:");
+    println!("  genkey                              - Generate a new API key");
+    println!("  checkkey <api_key>                  - Check if an API key is valid");
+    println!("  upload <file_path> <target_name>    - Upload a file");
+    println!("  download <file_name>                - Download a file");
+    println!("  search <query>                      - Search for files");
+    println!("  delete <file_name>                  - Delete a file");
+    println!("  list                                - List all files");
 }
