@@ -60,11 +60,13 @@ jobs:
           # Use fpm to create DEB for both x64 and ARM64
           mkdir -p deb_build/usr/local/bin
           cp target/${{ matrix.target }}/release/UDTool deb_build/usr/local/bin/
+          cd release
           fpm -s dir -t deb -n udtool -v 1.0.0 \
             --architecture ${{ matrix.arch }} \
-            -C deb_build -o release/ \
+            -C ../deb_build \
             --maintainer "Ari Cummings <ari@aricummings.com>" \
             --description "Universal Data Tool - Manage files on remote server"
+          cd ..
 
       - name: Build RPM package
         run: |
@@ -80,15 +82,16 @@ jobs:
             RPM_ARCH="aarch64"
           fi
           
+          cd release
           fpm -s dir -t rpm \
             -n udtool \
             -v 1.0.0 \
             -a "$RPM_ARCH" \
             --rpm-os linux \
-            -C rpm_build \
-            -o release/ \
+            -C ../rpm_build \
             --maintainer "Ari Cummings <ari@aricummings.com>" \
             --description "Universal Data Tool - Manage files on remote server"
+          cd ..
 
       - name: Clean up empty files
         run: |
