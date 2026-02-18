@@ -49,14 +49,13 @@ jobs:
           sudo apt-get install -y ruby-dev > /dev/null 2>&1 || true
           sudo gem install fpm > /dev/null 2>&1 || true
           
-          # Install OpenSSL dev libraries for cross-compilation
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            sudo apt-get install -y \
-              aarch64-linux-gnu-gcc \
-              aarch64-linux-gnu-g++ \
-              libssl-dev \
-              libssl-dev:arm64 > /dev/null 2>&1 || true
-          fi
+          # Install cross-compilation toolchain for ARM64
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            aarch64-linux-gnu-gcc \
+            aarch64-linux-gnu-g++ \
+            libssl-dev > /dev/null 2>&1 || true
 
       - name: Build DEB package
         run: |
@@ -196,21 +195,24 @@ jobs:
 
       - name: Build MSI installer (WiX)
         run: |
-          # Download and install WiX v6 directly
-          choco install wixtoolset -y --force --no-progress
+          # Download and install WiX v6 CLI MSI
+          $wixMsiUrl = "https://github.com/wixtoolset/wix/releases/download/v6.0.2/wix-cli-x64.msi"
+          $wixToolsUrl = "https://github.com/wixtoolset/wix/releases/download/v6.0.2/WixAdditionalTools.exe"
           
-          # Alternative: Direct download if choco fails
-          # Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix/releases/download/v6.0.2/wix-cli-x64.msi" -OutFile wix-cli.msi
-          # msiexec /i wix-cli.msi /quiet /norestart
+          Write-Host "Downloading WiX CLI..."
+          Invoke-WebRequest -Uri $wixMsiUrl -OutFile wix-cli.msi -UseBasicParsing
           
-          # Install dotnet tool for wix
-          dotnet tool install --global wix
+          Write-Host "Installing WiX CLI..."
+          msiexec /i wix-cli.msi /quiet /norestart
           
-          # Install extension using PowerShell proper syntax
-          $output = (dotnet tool run wix extension add WixToolset.UI.wixext/5.0.0) 2>&1
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Warning: Extension install returned non-zero, but continuing..."
-          }
+          Write-Host "Downloading WiX Additional Tools..."
+          Invoke-WebRequest -Uri $wixToolsUrl -OutFile WixAdditionalTools.exe -UseBasicParsing
+          
+          Write-Host "Installing WiX Additional Tools..."
+          .\WixAdditionalTools.exe /quiet /norestart
+          
+          # Add WiX to PATH
+          $env:PATH = "C:\Program Files (x86)\WiX Toolset v6.0\bin;$env:PATH"
           
           # Extract version
           $version = "${{ github.ref_name }}" -replace 'v', ''
