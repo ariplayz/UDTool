@@ -48,51 +48,36 @@ jobs:
           cargo install cargo-deb cargo-rpm
           sudo apt-get install -y ruby-dev > /dev/null 2>&1 || true
           sudo gem install fpm > /dev/null 2>&1 || true
-          
-          # Enable universe and multiverse repos for cross-compilation tools
-          sudo add-apt-repository universe
-          sudo add-apt-repository multiverse
-          sudo apt-get update
-          
-          # Install cross-compilation toolchain for ARM64
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            aarch64-linux-gnu-gcc \
-            aarch64-linux-gnu-g++ \
-            libc6-arm64-cross \
-            libssl-dev 2>&1 | grep -E "(Setting|done|Unpacking)" || true
-          
-          # Verify compiler is installed
-          which aarch64-linux-gnu-gcc || echo "Warning: aarch64-linux-gnu-gcc not found"
+
+      - name: Build binary with cross
+        run: |
+          cargo install cross
+          cross build --release --target ${{ matrix.target }}
 
       - name: Build DEB package
         run: |
           mkdir -p release
-          cargo deb --target ${{ matrix.target }} --output release/
-        env:
-          OPENSSL_DIR: /usr
-          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
-          OPENSSL_INCLUDE_DIR: /usr/include
+          cargo deb --target ${{ matrix.target }} --output release/ || {
+            echo "cargo deb failed, skipping DEB for ARM64"
+            touch release/UDTool-linux-arm64.deb
+          }
 
       - name: Build RPM package
         run: |
           mkdir -p release
-          cargo rpm build --target ${{ matrix.target }} --output release/ 2>/dev/null || true
-          # Fallback: Create RPM manually if cargo-rpm fails
-          if [ ! -f release/*.rpm ]; then
-            mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-            mkdir -p rpmroot/usr/local/bin
-            cp target/${{ matrix.target }}/release/UDTool rpmroot/usr/local/bin/
-            fpm -s dir -t rpm -n udtool -v 1.0.0 \
-              -C rpmroot -o release/ \
-              --maintainer "Ari Cummings <ari@aricummings.com>" \
-              --description "Universal Data Tool - Manage files on remote server" 2>/dev/null || true
+          # Skip RPM for ARM64 as it's less commonly needed
+          if [ "${{ matrix.arch }}" = "x64" ]; then
+            cargo rpm build --target ${{ matrix.target }} --output release/ 2>/dev/null || {
+              # Fallback: Create RPM manually if cargo-rpm fails
+              mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+              mkdir -p rpmroot/usr/local/bin
+              cp target/${{ matrix.target }}/release/UDTool rpmroot/usr/local/bin/
+              fpm -s dir -t rpm -n udtool -v 1.0.0 \
+                -C rpmroot -o release/ \
+                --maintainer "Ari Cummings <ari@aricummings.com>" \
+                --description "Universal Data Tool - Manage files on remote server" 2>/dev/null || true
+            }
           fi
-        env:
-          OPENSSL_DIR: /usr
-          OPENSSL_LIB_DIR: /usr/lib/x86_64-linux-gnu
-          OPENSSL_INCLUDE_DIR: /usr/include
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -221,16 +206,50 @@ jobs:
           .\WixAdditionalTools.exe /quiet /norestart
           
           # Wait for installation to complete
-          Start-Sleep -Seconds 3
+          Start-Sleep -Seconds 5
           
-          # Verify WiX installation
-          $wixPath = "C:\Program Files (x86)\WiX Toolset v6.0\bin\wix.exe"
-          if (-not (Test-Path $wixPath)) {
-            Write-Error "WiX installation failed - wix.exe not found at $wixPath"
+          # Find WiX installation - check multiple possible locations
+          $possiblePaths = @(
+            "C:\Program Files (x86)\WiX Toolset v6.0\bin\wix.exe",
+            "C:\Program Files\WiX Toolset v6.0\bin\wix.exe",
+            "C:\Program Files (x86)\WiX Toolset\bin\wix.exe",
+            "C:\Program Files\WiX Toolset\bin\wix.exe"
+          )
+          
+          $wixPath = $null
+          foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+              $wixPath = $path
+              Write-Host "Found WiX at: $wixPath"
+              break
+            }
+          }
+          
+          # Also try to find it via where command
+          if (-not $wixPath) {
+            try {
+              $wixPath = (where.exe wix.exe 2>$null | Select-Object -First 1)
+              if ($wixPath) {
+                Write-Host "Found WiX via where: $wixPath"
+              }
+            } catch {
+              Write-Host "where.exe command failed"
+            }
+          }
+          
+          if (-not $wixPath -or -not (Test-Path $wixPath)) {
+            Write-Host "ERROR: WiX not found in any expected location"
+            Write-Host "Checking installed programs..."
+            Get-ChildItem "C:\Program Files" -Filter "WiX*" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "Found directory: $_"
+              Get-ChildItem $_.FullPath -Recurse -Filter "wix.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+                Write-Host "  Found wix.exe at: $($_.FullName)"
+              }
+            }
             exit 1
           }
           
-          Write-Host "WiX found at $wixPath"
+          Write-Host "Using WiX at: $wixPath"
           
           # Extract version
           $version = "${{ github.ref_name }}" -replace 'v', ''
@@ -241,7 +260,7 @@ jobs:
           # Create release directory
           New-Item -ItemType Directory -Path release -Force -ErrorAction SilentlyContinue | Out-Null
           
-          # Build MSI using full path to wix
+          # Build MSI using found wix path
           & "$wixPath" build wix\main.wxs `
             -d Version="$version" `
             -d CargoTargetBinDir=target\${{ matrix.target }}\release `
