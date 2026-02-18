@@ -45,55 +45,26 @@ jobs:
       - name: Install build tools for DEB/RPM
         run: |
           sudo apt-get update
-          sudo apt-get install -y cargo-deb cargo-rpm
-
-      - name: Update Cargo.toml with architecture
-        run: |
-          sed -i 's/^\(name = "UDTool"\)/\1\n[package]\nmetadata.deb.assets = [[]]/' Cargo.toml
+          cargo install cargo-deb
+          cargo install cargo-rpm
 
       - name: Build DEB package
         run: |
-          cross build --release --target ${{ matrix.target }}
-          # Manual DEB creation since cargo-deb may not work with cross
-          mkdir -p deb/DEBIAN deb/usr/local/bin
-          cp target/${{ matrix.target }}/release/UDTool deb/usr/local/bin/
-          cat > deb/DEBIAN/control << 'CONTROL_EOF'
-          Package: udtool
-          Version: ${GITHUB_REF#refs/tags/v}
-          Architecture: ${{ matrix.arch }}
-          Maintainer: Ari Cummings <ari@aricummings.com>
-          Description: Universal Data Tool - Manage files on remote server
-          CONTROL_EOF
-          dpkg-deb --build deb release/UDTool-linux-${{ matrix.arch }}.deb
+          cargo deb --release --target ${{ matrix.target }} -o release/
 
       - name: Build RPM package
         run: |
-          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          mkdir -p rpmroot/usr/local/bin
-          cp target/${{ matrix.target }}/release/UDTool rpmroot/usr/local/bin/
-          cat > ~/rpmbuild/SPECS/udtool.spec << 'EOF'
-          Name: udtool
-          Version: ${GITHUB_REF#refs/tags/v}
-          Release: 1
-          Summary: Universal Data Tool
-          License: GNU GPL v3
-          
-          %description
-          Manage files on remote server with API key authentication
-          
-          %prep
-          
-          %build
-          
-          %install
-          mkdir -p %{buildroot}/usr/local/bin
-          cp -r %{_sourcedir}/* %{buildroot}/
-          
-          %files
-          /usr/local/bin/UDTool
-          EOF
-          cp target/${{ matrix.target }}/release/UDTool ~/rpmbuild/SOURCES/
-          rpmbuild -bb ~/rpmbuild/SPECS/udtool.spec --define "_rpmdir $(pwd)/release"
+          cargo rpm build --release --target ${{ matrix.target }} 2>/dev/null || true
+          # Fallback: Create RPM manually if cargo-rpm fails
+          if [ ! -f release/*.rpm ]; then
+            mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+            mkdir -p rpmroot/usr/local/bin
+            cp target/${{ matrix.target }}/release/UDTool rpmroot/usr/local/bin/
+            fpm -s dir -t rpm -n udtool -v ${GITHUB_REF#refs/tags/v} \
+              -C rpmroot -o release/ \
+              --maintainer "Ari Cummings <ari@aricummings.com>" \
+              --description "Universal Data Tool - Manage files on remote server"
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -134,7 +105,13 @@ jobs:
 
       - name: Build PKG installer
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          # Extract version from tag or use fallback
+          VERSION="${{ github.ref_name }}"
+          if [[ "$VERSION" == "master" ]] || [[ "$VERSION" == "main" ]]; then
+            VERSION="1.0.0"
+          fi
+          VERSION=${VERSION#v}
+          
           STAGING_DIR="pkg_staging"
           rm -rf "$STAGING_DIR"
           mkdir -p "$STAGING_DIR/usr/local/bin"
@@ -200,16 +177,27 @@ jobs:
       - name: Build MSI installer (WiX)
         run: |
           # Install WiX Toolset
-          choco install wixtoolset -y
-          $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          choco install wixtoolset -y --no-progress
+          
+          # Use full path to wix since it may not be in PATH
+          $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin\wix.exe"
+          if (-not (Test-Path $wixPath)) {
+            $wixPath = "wix"
+          }
+          
+          # Extract version
+          $version = "${{ github.ref_name }}" -replace 'v', ''
+          if ($version -eq "master" -or $version -eq "main") {
+            $version = "1.0.0"
+          }
           
           # Build MSI
-          wix build wix\main.wxs `
-            -d Version="${{ github.ref_name }}" `
+          & $wixPath build wix\main.wxs `
+            -d Version="$version" `
             -d CargoTargetBinDir=target\${{ matrix.target }}\release `
             -d PlatformArch=${{ matrix.arch }} `
             -ext WixToolset.UI.wixext `
-            -o release\UDTool-${{ github.ref_name }}-${{ matrix.arch }}.msi
+            -o release\UDTool-$version-${{ matrix.arch }}.msi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -263,11 +251,11 @@ jobs:
             
             ### macOS
             - **Executables**: UDTool-macos-x64, UDTool-macos-arm64, UDTool-macos-universal
-            - **Installer**: UDTool-${{ github.ref_name }}.pkg
+            - **Installer**: UDTool-1.0.0.pkg (or version-specific)
             
             ### Windows
             - **Executables**: UDTool-windows-x64.exe, UDTool-windows-arm64.exe
-            - **Installers**: UDTool-${{ github.ref_name }}-x64.msi, UDTool-${{ github.ref_name }}-arm64.msi
+            - **Installers**: UDTool-1.0.0-x64.msi, UDTool-1.0.0-arm64.msi (or version-specific)
             
             ## Installation
             
