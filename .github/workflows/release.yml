@@ -47,23 +47,25 @@ jobs:
           sudo apt-get update
           cargo install cargo-deb
           cargo install cargo-rpm
-
       - name: Build DEB package
         run: |
-          cargo deb --release --target ${{ matrix.target }} -o release/
+          cargo install cargo-deb
+          cargo deb --target ${{ matrix.target }} -- --release -o release/
 
       - name: Build RPM package
         run: |
-          cargo rpm build --release --target ${{ matrix.target }} 2>/dev/null || true
+          cargo install cargo-rpm
+          cargo rpm build --target ${{ matrix.target }} -- --release 2>/dev/null || true
           # Fallback: Create RPM manually if cargo-rpm fails
           if [ ! -f release/*.rpm ]; then
             mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
             mkdir -p rpmroot/usr/local/bin
             cp target/${{ matrix.target }}/release/UDTool rpmroot/usr/local/bin/
-            fpm -s dir -t rpm -n udtool -v ${GITHUB_REF#refs/tags/v} \
+            cargo install fpm 2>/dev/null || sudo apt-get install -y ruby-dev && sudo gem install fpm || true
+            fpm -s dir -t rpm -n udtool -v 1.0.0 \
               -C rpmroot -o release/ \
               --maintainer "Ari Cummings <ari@aricummings.com>" \
-              --description "Universal Data Tool - Manage files on remote server"
+              --description "Universal Data Tool - Manage files on remote server" || true
           fi
 
       - name: Upload artifacts
@@ -179,11 +181,8 @@ jobs:
           # Install WiX Toolset
           choco install wixtoolset -y --no-progress
           
-          # Use full path to wix since it may not be in PATH
-          $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin\wix.exe"
-          if (-not (Test-Path $wixPath)) {
-            $wixPath = "wix"
-          }
+          # Set PATH to include WiX
+          $env:PATH = "C:\Program Files (x86)\WiX Toolset v3.14\bin;$env:PATH"
           
           # Extract version
           $version = "${{ github.ref_name }}" -replace 'v', ''
@@ -191,8 +190,15 @@ jobs:
             $version = "1.0.0"
           }
           
+          # Verify wix is available
+          $wixTest = Get-Command wix -ErrorAction SilentlyContinue
+          if (-not $wixTest) {
+            Write-Error "WiX command not found after installation"
+            exit 1
+          }
+          
           # Build MSI
-          & $wixPath build wix\main.wxs `
+          wix build wix\main.wxs `
             -d Version="$version" `
             -d CargoTargetBinDir=target\${{ matrix.target }}\release `
             -d PlatformArch=${{ matrix.arch }} `

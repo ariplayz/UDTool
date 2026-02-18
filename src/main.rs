@@ -33,11 +33,12 @@ fn save_api_key(key: &str) -> std::io::Result<()> {
 }
 
 fn check_key(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -> std::io::Result<()> {
-    if args.len() < 3 {
-        println!("Usage: checkkey <api_key>");
-        return Ok(());
-    }
-    let key = &args[2];
+    let key = if args.len() < 3 {
+        // No arguments provided, check the stored key
+        load_api_key()?
+    } else {
+        args[2].clone()
+    };
 
     println!("Checking API key...");
     let res = client
@@ -52,7 +53,7 @@ fn check_key(args: &[String], client: &reqwest::blocking::Client, base_url: &str
                 if let Some(message) = json.get("message").and_then(|m| m.as_str()) {
                     println!("{}", message);
                     if message == "Key is valid." {
-                        save_api_key(key)?;
+                        save_api_key(&key)?;
                         println!("API key saved successfully.");
                     }
                 }
@@ -105,22 +106,28 @@ fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str, a
         println!("Usage: upload <file_path> <target_name>");
         return Ok(());
     }
-    let file_name = &args[2];
+    let file_path = &args[2];
     let target_name = &args[3];
-    let file_contents = fs::read(file_name)?;
 
-    println!("Uploading {file_name}...");
+    // Read the file
+    let file_contents = fs::read(file_path)?;
+
+    println!("Uploading {file_path}...");
+
+    // Create multipart form with correct field name "file"
     let part = reqwest::blocking::multipart::Part::bytes(file_contents)
-        .file_name(target_name.to_string())
-        .mime_str("application/octet-stream")
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-    let form = reqwest::blocking::multipart::Form::new().part("file", part);
+        .file_name(target_name.to_string());
+
+    let form = reqwest::blocking::multipart::Form::new()
+        .part("file", part);
+
     let res = client
         .post(&format!("{base_url}/{target_name}"))
         .header("API-Key", api_key)
         .multipart(form)
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
     let status = res.status();
     if status.is_success() {
         println!("File successfully uploaded.");
