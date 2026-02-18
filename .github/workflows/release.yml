@@ -49,13 +49,22 @@ jobs:
           sudo apt-get install -y ruby-dev > /dev/null 2>&1 || true
           sudo gem install fpm > /dev/null 2>&1 || true
           
+          # Enable universe and multiverse repos for cross-compilation tools
+          sudo add-apt-repository universe
+          sudo add-apt-repository multiverse
+          sudo apt-get update
+          
           # Install cross-compilation toolchain for ARM64
           sudo apt-get install -y \
             build-essential \
             pkg-config \
             aarch64-linux-gnu-gcc \
             aarch64-linux-gnu-g++ \
-            libssl-dev > /dev/null 2>&1 || true
+            libc6-arm64-cross \
+            libssl-dev 2>&1 | grep -E "(Setting|done|Unpacking)" || true
+          
+          # Verify compiler is installed
+          which aarch64-linux-gnu-gcc || echo "Warning: aarch64-linux-gnu-gcc not found"
 
       - name: Build DEB package
         run: |
@@ -211,8 +220,17 @@ jobs:
           Write-Host "Installing WiX Additional Tools..."
           .\WixAdditionalTools.exe /quiet /norestart
           
-          # Add WiX to PATH
-          $env:PATH = "C:\Program Files (x86)\WiX Toolset v6.0\bin;$env:PATH"
+          # Wait for installation to complete
+          Start-Sleep -Seconds 3
+          
+          # Verify WiX installation
+          $wixPath = "C:\Program Files (x86)\WiX Toolset v6.0\bin\wix.exe"
+          if (-not (Test-Path $wixPath)) {
+            Write-Error "WiX installation failed - wix.exe not found at $wixPath"
+            exit 1
+          }
+          
+          Write-Host "WiX found at $wixPath"
           
           # Extract version
           $version = "${{ github.ref_name }}" -replace 'v', ''
@@ -223,8 +241,8 @@ jobs:
           # Create release directory
           New-Item -ItemType Directory -Path release -Force -ErrorAction SilentlyContinue | Out-Null
           
-          # Build MSI
-          wix build wix\main.wxs `
+          # Build MSI using full path to wix
+          & "$wixPath" build wix\main.wxs `
             -d Version="$version" `
             -d CargoTargetBinDir=target\${{ matrix.target }}\release `
             -d PlatformArch=${{ matrix.arch }} `
