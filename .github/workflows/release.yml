@@ -57,38 +57,38 @@ jobs:
       - name: Build DEB package
         run: |
           mkdir -p release
-          # Try cargo-deb first (works well for native builds)
-          if ! cargo deb --target ${{ matrix.target }} --output release/ 2>/dev/null; then
-            # Fallback to fpm if cargo-deb fails
-            echo "cargo-deb failed, using fpm fallback"
-            mkdir -p deb_build/usr/local/bin
-            cp target/${{ matrix.target }}/release/UDTool deb_build/usr/local/bin/
-            fpm -s dir -t deb -n udtool -v 1.0.0 \
-              --architecture ${{ matrix.arch }} \
-              -C deb_build -o release/ \
-              --maintainer "Ari Cummings <ari@aricummings.com>" \
-              --description "Universal Data Tool - Manage files on remote server" 2>/dev/null || {
-              echo "fpm also failed, creating dummy deb file"
-              mkdir -p release
-            }
-          fi
+          # Use fpm to create DEB for both x64 and ARM64
+          mkdir -p deb_build/usr/local/bin
+          cp target/${{ matrix.target }}/release/UDTool deb_build/usr/local/bin/
+          fpm -s dir -t deb -n udtool -v 1.0.0 \
+            --architecture ${{ matrix.arch }} \
+            -C deb_build -o release/ \
+            --maintainer "Ari Cummings <ari@aricummings.com>" \
+            --description "Universal Data Tool - Manage files on remote server"
 
       - name: Build RPM package
         run: |
           mkdir -p release
-          # Skip RPM for ARM64 as it's less commonly needed
+          # Build RPM for both x64 and ARM64
+          mkdir -p rpm_build/usr/local/bin
+          cp target/${{ matrix.target }}/release/UDTool rpm_build/usr/local/bin/
+          
+          # Set architecture based on matrix
           if [ "${{ matrix.arch }}" = "x64" ]; then
-            cargo rpm build --target ${{ matrix.target }} --output release/ 2>/dev/null || {
-              # Fallback: Create RPM manually if cargo-rpm fails
-              mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-              mkdir -p rpmroot/usr/local/bin
-              cp target/${{ matrix.target }}/release/UDTool rpmroot/usr/local/bin/
-              fpm -s dir -t rpm -n udtool -v 1.0.0 \
-                -C rpmroot -o release/ \
-                --maintainer "Ari Cummings <ari@aricummings.com>" \
-                --description "Universal Data Tool - Manage files on remote server" 2>/dev/null || true
-            }
+            RPM_ARCH="x86_64"
+          else
+            RPM_ARCH="aarch64"
           fi
+          
+          fpm -s dir -t rpm \
+            -n udtool \
+            -v 1.0.0 \
+            -a "$RPM_ARCH" \
+            --rpm-os linux \
+            -C rpm_build \
+            -o release/ \
+            --maintainer "Ari Cummings <ari@aricummings.com>" \
+            --description "Universal Data Tool - Manage files on remote server"
 
       - name: Clean up empty files
         run: |
