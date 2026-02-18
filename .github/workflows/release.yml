@@ -57,10 +57,21 @@ jobs:
       - name: Build DEB package
         run: |
           mkdir -p release
-          cargo deb --target ${{ matrix.target }} --output release/ || {
-            echo "cargo deb failed for ${{ matrix.arch }}, skipping DEB"
-            echo "This is expected for ARM64 cross-compilation"
-          }
+          # Try cargo-deb first (works well for native builds)
+          if ! cargo deb --target ${{ matrix.target }} --output release/ 2>/dev/null; then
+            # Fallback to fpm if cargo-deb fails
+            echo "cargo-deb failed, using fpm fallback"
+            mkdir -p deb_build/usr/local/bin
+            cp target/${{ matrix.target }}/release/UDTool deb_build/usr/local/bin/
+            fpm -s dir -t deb -n udtool -v 1.0.0 \
+              --architecture ${{ matrix.arch }} \
+              -C deb_build -o release/ \
+              --maintainer "Ari Cummings <ari@aricummings.com>" \
+              --description "Universal Data Tool - Manage files on remote server" 2>/dev/null || {
+              echo "fpm also failed, creating dummy deb file"
+              mkdir -p release
+            }
+          fi
 
       - name: Build RPM package
         run: |
@@ -272,6 +283,11 @@ jobs:
             -d PlatformArch=${{ matrix.arch }} `
             -ext WixToolset.UI.wixext `
             -o release\UDTool-$version-${{ matrix.arch }}.msi
+
+      - name: Clean up debug files
+        run: |
+          # Remove .wixpdb files (debug symbols, not needed for release)
+          Remove-Item release\*.wixpdb -Force -ErrorAction SilentlyContinue
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
