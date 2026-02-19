@@ -1,4 +1,4 @@
-﻿﻿# UDTool - Universal Data Tool
+# Universal Data Tool
 
 A command-line tool written in Rust for managing files on a remote server with API key authentication.
 
@@ -10,13 +10,20 @@ A command-line tool written in Rust for managing files on a remote server with A
 
 ## Table of Contents
 
-1. [Features](#features)
-2. [Installation](#installation)
-3. [Configuration](#configuration)
-4. [Usage](#usage)
-5. [Commands Reference](#commands-reference)
-6. [API Key Storage](#api-key-storage)
-7. [Troubleshooting](#troubleshooting)
+1. [Other Repositories](#other-repositories)
+2. [Features](#features)
+3. [Installation](#installation)
+4. [Configuration](#configuration)
+5. [Usage](#usage)
+6. [Commands Reference](#commands-reference)
+7. [API Key Storage](#api-key-storage)
+8. [Troubleshooting](#troubleshooting)
+
+---
+
+## Other Repositories
+- [**ASP.NET API**](https://github.com/ariplayz/UDToolAPI)
+- [**UDTool Desktop**](https://github.com/ariplayz/UDTool-Desktop)
 
 ---
 
