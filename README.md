@@ -1,234 +1,151 @@
-# Universal Data Tool
+﻿# UDTool - Universal Data Tool
 
-A command-line tool written in Rust for managing files on a remote server with API key authentication.
+A lightweight, cross-platform command-line utility for uploading, downloading, and managing files on a remote server using API key authentication.
 
-**Version:** 1.0.0  
+**Version:** 1.3.0  
 **Author:** Ari Cummings  
 **API Server:** https://UDTool.delphigamerz.xyz
 
 ---
 
-## Table of Contents
+## Quick Links
 
-1. [Other Repositories](#other-repositories)
-2. [Features](#features)
-3. [Installation](#installation)
-4. [Configuration](#configuration)
-5. [Usage](#usage)
-6. [Commands Reference](#commands-reference)
-7. [API Key Storage](#api-key-storage)
-8. [Troubleshooting](#troubleshooting)
-
----
-
-## Other Repositories
-- [**ASP.NET API**](https://github.com/ariplayz/UDToolAPI)
-- [**UDTool Desktop**](https://github.com/ariplayz/UDTool-Desktop)
+- [ASP.NET API Repository](https://github.com/ariplayz/UDToolAPI)
+- [UDTool Desktop Application](https://github.com/ariplayz/UDTool-Desktop)
+- [GitHub Releases](https://github.com/ariplayz/UDTool/releases)
 
 ---
 
 ## Features
 
-- **API Key Management**: Generate and validate API keys with secure storage
-- **File Upload**: Upload files to the remote server with custom names
-- **File Download**: Download files from the remote server to local disk
-- **File Search**: Search for files by name on the remote server
-- **File Deletion**: Delete files from the remote server
-- **File Listing**: List all files stored on the remote server
-- **Secure Authentication**: All operations require a valid API key sent via HTTP headers
-- **Cross-platform Support**: Works on Windows, macOS, and Linux
+- ✅ **API Key Management**: Generate and validate API keys with secure local storage
+- ✅ **File Operations**: Upload, download, delete, search, and list files
+- ✅ **Progress Tracking**: Real-time progress bars for uploads and downloads
+- ✅ **Secure Authentication**: All operations use API key authentication via HTTP headers
+- ✅ **Cross-platform**: Windows, macOS (Intel & Apple Silicon), and Linux (x64 & ARM64)
+- ✅ **Easy Installation**: Native installers for all platforms
 
 ---
 
 ## Installation
 
-### Windows (MSI Installer - Recommended)
+### Windows
 
-1. Download `UDTool-VERSION-x64.msi` or `UDTool-VERSION-arm64.msi` from [Releases](https://github.com/ariplayz/UDTool/releases)
-2. Double-click and follow the installer
-3. Command available: `UDTool list`
+Download and install the MSI for your architecture:
+- **x64**: `UDTool-VERSION-x64.msi`
+- **ARM64**: `UDTool-VERSION-arm64.msi`
 
-### macOS (PKG Installer - Recommended)
+Available from [Releases](https://github.com/ariplayz/UDTool/releases)
 
-1. Download `UDTool-VERSION.pkg` from [Releases](https://github.com/ariplayz/UDTool/releases)
-2. Double-click and follow the installer
-3. Binary installed to: `/usr/local/bin/UDTool`
-4. Open a new Terminal and run: `UDTool list`
+### macOS
 
-### Linux (DEB or RPM - Recommended)
+Download and install the universal PKG installer:
+- `UDTool-VERSION.pkg` (works on both Intel and Apple Silicon)
+
+Available from [Releases](https://github.com/ariplayz/UDTool/releases)
+
+Binary installed to: `/usr/local/bin/UDTool`
+
+### Linux
 
 **Debian/Ubuntu:**
 ```bash
-wget https://github.com/ariplayz/UDTool/releases/download/v1.0.0/UDTool-linux-x64.deb
-sudo dpkg -i UDTool-linux-x64.deb
-UDTool list
+sudo dpkg -i udtool_VERSION-1_amd64.deb      # x64
+sudo dpkg -i udtool_VERSION-1_arm64.deb      # ARM64
 ```
 
 **RHEL/CentOS/Fedora:**
 ```bash
-wget https://github.com/ariplayz/UDTool/releases/download/v1.0.0/UDTool-linux-x64.rpm
-sudo rpm -i UDTool-linux-x64.rpm
-UDTool list
+sudo rpm -i udtool-VERSION-1.x86_64.rpm      # x64
+sudo rpm -i udtool-VERSION-1.aarch64.rpm     # ARM64
 ```
 
-### Linux/macOS (Binary)
-
-1. Download `UDTool-linux-x64`, `UDTool-linux-arm64`, `UDTool-macos-x64`, or `UDTool-macos-arm64` from [Releases](https://github.com/ariplayz/UDTool/releases)
-2. Make executable: `chmod +x UDTool-*`
-3. Add to PATH: `sudo mv UDTool-* /usr/local/bin/UDTool`
-
-### Build from Source
-
+Or use standalone binary:
 ```bash
-git clone https://github.com/ariplayz/UDTool.git
-cd UDTool
-cargo build --release
-./target/release/UDTool list
+chmod +x UDTool-linux-x64
+sudo mv UDTool-linux-x64 /usr/local/bin/UDTool
 ```
+
+Available from [Releases](https://github.com/ariplayz/UDTool/releases)
 
 ---
 
-## Automated Release Process
+## Quick Start
 
-Simply push a version tag and GitHub Actions will automatically:
+### 1. Generate an API Key
 
-```bash
-git tag v1.0.0
-git push origin main --tags
-```
-
-**All builds happen automatically:**
-- ✅ Linux x64 & ARM64 executables
-- ✅ Linux x64 & ARM64 DEB packages
-- ✅ Linux x64 & ARM64 RPM packages
-- ✅ macOS x64 & ARM64 executables
-- ✅ macOS universal executable
-- ✅ macOS PKG installer
-- ✅ Windows x64 & ARM64 executables
-- ✅ Windows x64 & ARM64 MSI installers
-- ✅ SHA256 checksums for all files
-
-All files are uploaded to GitHub Releases automatically.
-
-## Configuration
-
-### API Key Storage
-
-UDTool stores your API key in a platform-specific directory:
-
-- **Windows**: `%APPDATA%\UDTool\api_key.txt`
-- **Linux**: `~/.config/UDTool/api_key.txt`
-- **macOS**: `~/Library/Application Support/UDTool/api_key.txt`
-
-The directory is created automatically on first use.
-
----
-
-## Usage
-
-### Quick Start
-
-```bash
-# Generate a new API key
-UDTool genkey
-
-# Upload a file
-UDTool upload local_file.txt remote_file.txt
-
-# Download a file
-UDTool download remote_file.txt
-
-# List all files
-UDTool list
-
-# Search for files
-UDTool search "pattern"
-
-# Delete a file
-UDTool delete remote_file.txt
-```
-
-### API Key Commands
-
-#### Generate New Key
 ```bash
 UDTool genkey
 ```
-Generates a new API key and saves it locally.
 
-#### Check Existing Key
+Generates and saves a new API key locally.
+
+### 2. Check Your API Key
+
 ```bash
-UDTool checkkey YOUR_API_KEY
-```
-Validates an API key and saves it if valid.
-
-### File Operations
-
-#### Upload
-```bash
-UDTool upload <local_path> <remote_name>
+UDTool checkkey              # Check stored key
+UDTool checkkey YOUR_KEY_123 # Check specific key
 ```
 
-#### Download
+### 3. Upload a File
+
 ```bash
-UDTool download <remote_name>
+UDTool upload /path/to/file.txt remote_name.txt
 ```
 
-#### List
+### 4. Download a File
+
+```bash
+UDTool download remote_name.txt
+```
+
+### 5. Search for Files
+
+```bash
+UDTool search filename_pattern
+```
+
+### 6. List All Files
+
 ```bash
 UDTool list
 ```
 
-#### Search
+### 7. Delete a File
+
 ```bash
-UDTool search <term>
+UDTool delete filename.txt
 ```
-
-#### Delete
-```bash
-UDTool delete <remote_name>
-```
-
----
-
-## Commands Reference
-
-| Command | Syntax | Description |
-|---------|--------|-------------|
-| Generate Key | `UDTool genkey` | Generate and save new API key |
-| Check Key | `UDTool checkkey <key>` | Validate and save API key |
-| Upload | `UDTool upload <local> <remote>` | Upload a file |
-| Download | `UDTool download <remote>` | Download a file |
-| List | `UDTool list` | List all files |
-| Search | `UDTool search <term>` | Search for files |
-| Delete | `UDTool delete <remote>` | Delete a file |
 
 ---
 
 ## API Key Storage
 
-### Security
+Your API key is stored locally in your user's config directory:
 
-- Keep your API key private (like a password)
-- Don't share with untrusted parties
-- Back up in a secure location
-- On Unix systems, config directory permissions:
-  ```bash
-  chmod 700 ~/.config/UDTool
-  chmod 600 ~/.config/UDTool/api_key.txt
-  ```
+| OS      | Location |
+|---------|----------|
+| Windows | `%APPDATA%\UDTool\api_key.txt` |
+| macOS   | `~/.config/UDTool/api_key.txt` |
+| Linux   | `~/.config/UDTool/api_key.txt` |
 
-### View Saved Key
+The stored key is used automatically for all authenticated operations.
 
-**Windows:**
-```cmd
-type %APPDATA%\UDTool\api_key.txt
-```
+---
 
-**Linux/macOS:**
-```bash
-cat ~/.config/UDTool/api_key.txt
-```
+## Server API Endpoints
+
+The server provides these endpoints (all authenticated endpoints require `API-Key` header):
+
+| Method | Endpoint | Requires Auth | Description |
+|--------|----------|---------------|-------------|
+| GET | `/key/check/{key}` | No | Validate an API key |
+| POST | `/key/new` | No | Generate a new API key |
+| POST | `/{fileName}` | Yes | Upload a file |
+| GET | `/{fileName}` | Yes | Download a file |
+| GET | `/list` | Yes | List all files |
+| GET | `/search/{searchTerm}` | Yes | Search for files |
+| DELETE | `/{fileName}` | Yes | Delete a file |
 
 ---
 
@@ -237,30 +154,86 @@ cat ~/.config/UDTool/api_key.txt
 ### "API key not found"
 Generate a new key: `UDTool genkey`
 
-### "Upload/Download failed with status: 401"
-Invalid API key. Run: `UDTool checkkey YOUR_KEY`
+### "Key is not valid"
+Verify your key: `UDTool checkkey <api_key>`
 
-### "File not found (404)"
-File doesn't exist. List files: `UDTool list`
+### Upload process killed
+Possible causes:
+- **Out of Memory**: Large files may exceed available RAM
+- **Network timeout**: Check your network connection
+- **File permissions**: Ensure file is readable
 
-### Connection Issues
-- Check internet connection
-- Verify server is online: https://UDTool.delphigamerz.xyz
-- Check firewall/proxy settings
+Try uploading a smaller file to test.
+
+### No progress bar visible
+Progress bars require ANSI support. Update to Windows Terminal or modern PowerShell on Windows.
+
+---
+
+## Building from Source
+
+Requirements: Rust 1.70+
+
+```bash
+git clone https://github.com/ariplayz/UDTool.git
+cd UDTool
+cargo build --release
+./target/release/UDTool
+```
+
+---
+
+## Building Installers
+
+### Windows MSI
+Requires WiX Toolset v6.0+:
+```powershell
+wix build wix\main.wxs -d Version="1.0.0" -d CargoTargetBinDir=target\x86_64-pc-windows-msvc\release -d PlatformArch=x64
+```
+
+### macOS PKG
+```bash
+./create-macos-pkg.sh
+```
+
+### Linux DEB
+Requires `cargo-deb`:
+```bash
+cargo install cargo-deb
+cargo deb
+```
+
+### Linux RPM
+Requires `fpm`:
+```bash
+fpm -s dir -t rpm -n udtool -v 1.0.0 -a x86_64 -C rpm_build -p udtool-1.0.0-1.x86_64.rpm usr/local/bin/UDTool
+```
+
+---
+
+## Automated Releases
+
+Push a version tag to trigger automatic builds:
+
+```bash
+git tag v1.3.0
+git push origin main --tags
+```
+
+GitHub Actions automatically builds and publishes:
+- Windows x64 & ARM64 (.exe + .msi)
+- macOS universal (.pkg)
+- Linux x64 & ARM64 (.deb + .rpm + executables)
 
 ---
 
 ## License
 
-See `package.license` file.
-
----
+MIT License - See LICENSE file
 
 ## Support
 
-Contact: ari@aricummings.com
-
----
-
-**Version 1.0.0** | February 17, 2026
+For issues, feature requests, or questions:
+- Open an issue on [GitHub](https://github.com/ariplayz/UDTool/issues)
+- Contact: Ari Cummings <ari@aricummings.com>
 

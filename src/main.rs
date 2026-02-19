@@ -34,7 +34,6 @@ fn save_api_key(key: &str) -> std::io::Result<()> {
 
 fn check_key(args: &[String], client: &reqwest::blocking::Client, base_url: &str) -> std::io::Result<()> {
     let key = if args.len() < 3 {
-        // No arguments provided, check the stored key
         load_api_key()?
     } else {
         args[2].clone()
@@ -46,26 +45,35 @@ fn check_key(args: &[String], client: &reqwest::blocking::Client, base_url: &str
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-    let status = res.status();
-    if status.is_success() {
-        match res.json::<serde_json::Value>() {
-            Ok(json) => {
-                if let Some(message) = json.get("message").and_then(|m| m.as_str()) {
-                    println!("{}", message);
-                    if message == "Key is valid." {
-                        save_api_key(&key)?;
-                        println!("API key saved successfully.");
-                    }
+    match res.status().is_success() {
+        true => handle_check_key_success(res, &key)?,
+        false => handle_check_key_error(res)?,
+    }
+    Ok(())
+}
+
+fn handle_check_key_success(res: reqwest::blocking::Response, key: &str) -> std::io::Result<()> {
+    match res.json::<serde_json::Value>() {
+        Ok(json) => {
+            if let Some(message) = json.get("message").and_then(|m| m.as_str()) {
+                println!("{}", message);
+                if message == "Key is valid." {
+                    save_api_key(key)?;
+                    println!("API key saved successfully.");
                 }
             }
-            Err(_) => println!("Could not parse response."),
         }
-    } else {
-        let body = res.text().unwrap_or_default();
-        println!("Check failed with status: {status}");
-        if !body.is_empty() {
-            println!("Server response: {body}");
-        }
+        Err(_) => println!("Could not parse response."),
+    }
+    Ok(())
+}
+
+fn handle_check_key_error(res: reqwest::blocking::Response) -> std::io::Result<()> {
+    let status = res.status();
+    let body = res.text().unwrap_or_default();
+    println!("Check failed with status: {status}");
+    if !body.is_empty() {
+        println!("Server response: {body}");
     }
     Ok(())
 }
@@ -77,26 +85,36 @@ fn generate_key(client: &reqwest::blocking::Client, base_url: &str) -> std::io::
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-    let status = res.status();
-    if status.is_success() {
-        match res.json::<serde_json::Value>() {
-            Ok(json) => {
-                if let Some(key) = json.get("key").and_then(|k| k.as_str()) {
+    match res.status().is_success() {
+        true => handle_generate_key_success(res)?,
+        false => handle_generate_key_error(res)?,
+    }
+    Ok(())
+}
+
+fn handle_generate_key_success(res: reqwest::blocking::Response) -> std::io::Result<()> {
+    match res.json::<serde_json::Value>() {
+        Ok(json) => {
+            match json.get("key").and_then(|k| k.as_str()) {
+                Some(key) => {
                     println!("New API key generated: {key}");
                     save_api_key(key)?;
                     println!("API key saved successfully.");
-                } else {
-                    println!("Could not extract key from response.");
                 }
+                None => println!("Could not extract key from response."),
             }
-            Err(_) => println!("Could not parse response."),
         }
-    } else {
-        let body = res.text().unwrap_or_default();
-        println!("Key generation failed with status: {status}");
-        if !body.is_empty() {
-            println!("Server response: {body}");
-        }
+        Err(_) => println!("Could not parse response."),
+    }
+    Ok(())
+}
+
+fn handle_generate_key_error(res: reqwest::blocking::Response) -> std::io::Result<()> {
+    let status = res.status();
+    let body = res.text().unwrap_or_default();
+    println!("Key generation failed with status: {status}");
+    if !body.is_empty() {
+        println!("Server response: {body}");
     }
     Ok(())
 }
@@ -109,9 +127,11 @@ fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str, a
     let file_path = &args[2];
     let target_name = &args[3];
 
-    // Read the file
-    let file_contents = fs::read(file_path)?;
-    let total_size = file_contents.len() as u64;
+    // Get file metadata for progress bar
+    let metadata = fs::metadata(file_path)?;
+    let total_size = metadata.len();
+
+    println!("Uploading {file_path}...");
 
     // Create progress bar
     let pb = indicatif::ProgressBar::new(total_size);
@@ -120,11 +140,9 @@ fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str, a
         .unwrap()
         .progress_chars("#>-"));
 
-    println!("Uploading {file_path}...");
-
-    // Simulate progress by incrementing the bar
-    // For upload, we'll increment it as we prepare the request
-    pb.inc(0);
+    // Read file in chunks and update progress
+    let file_contents = fs::read(file_path)?;
+    pb.inc(file_contents.len() as u64);
 
     // Create multipart form with correct field name "file"
     let part = reqwest::blocking::multipart::Part::bytes(file_contents)
@@ -142,16 +160,25 @@ fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str, a
 
     pb.finish_with_message("Upload complete");
 
+    match res.status().is_success() {
+        true => handle_upload_success(res, base_url, target_name)?,
+        false => handle_upload_error(res)?,
+    }
+    Ok(())
+}
+
+fn handle_upload_success(_res: reqwest::blocking::Response, base_url: &str, target_name: &str) -> std::io::Result<()> {
+    println!("File successfully uploaded.");
+    println!("File URL: {base_url}/{target_name}");
+    Ok(())
+}
+
+fn handle_upload_error(res: reqwest::blocking::Response) -> std::io::Result<()> {
     let status = res.status();
-    if status.is_success() {
-        println!("File successfully uploaded.");
-        println!("File URL: {base_url}/{target_name}");
-    } else {
-        let body = res.text().unwrap_or_default();
-        println!("Upload failed with status: {status}");
-        if !body.is_empty() {
-            println!("Server response: {body}");
-        }
+    let body = res.text().unwrap_or_default();
+    println!("Upload failed with status: {status}");
+    if !body.is_empty() {
+        println!("Server response: {body}");
     }
     Ok(())
 }
@@ -172,31 +199,40 @@ fn download(args: &[String], client: &reqwest::blocking::Client, base_url: &str,
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
+    match res.status().is_success() {
+        true => handle_download_success(res, file_name)?,
+        false => handle_download_error(res)?,
+    }
+    Ok(())
+}
+
+fn handle_download_success(res: reqwest::blocking::Response, file_name: &str) -> std::io::Result<()> {
+    // Get content length for progress bar
+    let total_size = res.content_length().unwrap_or(0);
+
+    // Create progress bar
+    let pb = indicatif::ProgressBar::new(total_size);
+    pb.set_style(indicatif::ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+        .unwrap()
+        .progress_chars("#>-"));
+
+    // Read content and update progress
+    let content = res.bytes().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    pb.inc(content.len() as u64);
+    pb.finish_with_message("Download complete");
+
+    fs::write(file_name, &content)?;
+    println!("Downloaded {file_name} successfully.");
+    Ok(())
+}
+
+fn handle_download_error(res: reqwest::blocking::Response) -> std::io::Result<()> {
     let status = res.status();
-    if status.is_success() {
-        // Get content length for progress bar
-        let total_size = res.content_length().unwrap_or(0);
-
-        // Create progress bar
-        let pb = indicatif::ProgressBar::new(total_size);
-        pb.set_style(indicatif::ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-            .unwrap()
-            .progress_chars("#>-"));
-
-        // Read content and update progress
-        let content = res.bytes().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        pb.inc(content.len() as u64);
-        pb.finish_with_message("Download complete");
-
-        fs::write(file_name, &content)?;
-        println!("Downloaded {file_name} successfully.");
-    } else {
-        let body = res.text().unwrap_or_default();
-        println!("Download failed with status: {status}");
-        if !body.is_empty() {
-            println!("Server response: {body}");
-        }
+    let body = res.text().unwrap_or_default();
+    println!("Download failed with status: {status}");
+    if !body.is_empty() {
+        println!("Server response: {body}");
     }
     Ok(())
 }
@@ -215,25 +251,35 @@ fn search(args: &[String], client: &reqwest::blocking::Client, base_url: &str, a
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-    let status = res.status();
-    if status.is_success() {
-        let files: Vec<String> = res.json()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    match res.status().is_success() {
+        true => handle_search_success(res, query)?,
+        false => handle_search_error(res)?,
+    }
+    Ok(())
+}
 
-        if files.is_empty() {
-            println!("No files found matching '{query}'.");
-        } else {
+fn handle_search_success(res: reqwest::blocking::Response, query: &str) -> std::io::Result<()> {
+    let files: Vec<String> = res.json()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    match files.is_empty() {
+        true => println!("No files found matching '{query}'."),
+        false => {
             println!("Found {} file(s):", files.len());
             for file in files {
                 println!("  - {}", file);
             }
         }
-    } else {
-        let body = res.text().unwrap_or_default();
-        println!("Search failed with status: {status}");
-        if !body.is_empty() {
-            println!("Server response: {body}");
-        }
+    }
+    Ok(())
+}
+
+fn handle_search_error(res: reqwest::blocking::Response) -> std::io::Result<()> {
+    let status = res.status();
+    let body = res.text().unwrap_or_default();
+    println!("Search failed with status: {status}");
+    if !body.is_empty() {
+        println!("Server response: {body}");
     }
     Ok(())
 }
@@ -252,15 +298,24 @@ fn delete(args: &[String], client: &reqwest::blocking::Client, base_url: &str, a
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
+    match res.status().is_success() {
+        true => handle_delete_success(file_name)?,
+        false => handle_delete_error(res)?,
+    }
+    Ok(())
+}
+
+fn handle_delete_success(file_name: &str) -> std::io::Result<()> {
+    println!("File '{file_name}' successfully deleted.");
+    Ok(())
+}
+
+fn handle_delete_error(res: reqwest::blocking::Response) -> std::io::Result<()> {
     let status = res.status();
-    if status.is_success() {
-        println!("File '{file_name}' successfully deleted.");
-    } else {
-        let body = res.text().unwrap_or_default();
-        println!("Delete failed with status: {status}");
-        if !body.is_empty() {
-            println!("Server response: {body}");
-        }
+    let body = res.text().unwrap_or_default();
+    println!("Delete failed with status: {status}");
+    if !body.is_empty() {
+        println!("Server response: {body}");
     }
     Ok(())
 }
@@ -273,25 +328,35 @@ fn list_files(client: &reqwest::blocking::Client, base_url: &str, api_key: &str)
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-    let status = res.status();
-    if status.is_success() {
-        let files: Vec<String> = res.json()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    match res.status().is_success() {
+        true => handle_list_success(res)?,
+        false => handle_list_error(res)?,
+    }
+    Ok(())
+}
 
-        if files.is_empty() {
-            println!("No files found.");
-        } else {
+fn handle_list_success(res: reqwest::blocking::Response) -> std::io::Result<()> {
+    let files: Vec<String> = res.json()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    match files.is_empty() {
+        true => println!("No files found."),
+        false => {
             println!("Files:");
             for file in files {
                 println!("  - {}", file);
             }
         }
-    } else {
-        let body = res.text().unwrap_or_default();
-        println!("List failed with status: {status}");
-        if !body.is_empty() {
-            println!("Server response: {body}");
-        }
+    }
+    Ok(())
+}
+
+fn handle_list_error(res: reqwest::blocking::Response) -> std::io::Result<()> {
+    let status = res.status();
+    let body = res.text().unwrap_or_default();
+    println!("List failed with status: {status}");
+    if !body.is_empty() {
+        println!("Server response: {body}");
     }
     Ok(())
 }
@@ -299,7 +364,7 @@ fn list_files(client: &reqwest::blocking::Client, base_url: &str, api_key: &str)
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
-    let version = "1.0";
+    let version = env!("CARGO_PKG_VERSION");
     let base_url = "https://UDTool.delphigamerz.xyz";
 
     println!("UDTool v{version} by Ari Cummings");
@@ -316,19 +381,29 @@ fn main() -> std::io::Result<()> {
         .build()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-    match operator.as_str().to_lowercase().as_str() {
+    let cmd = operator.to_lowercase();
+    match cmd.as_str() {
         "genkey" => generate_key(&client, base_url)?,
         "checkkey" => check_key(&args, &client, base_url)?,
-        "upload" | "download" | "search" | "delete" | "list" => {
+        "upload" => {
             let api_key = load_api_key()?;
-            match operator.as_str().to_lowercase().as_str() {
-                "upload" => upload(&args, &client, base_url, &api_key)?,
-                "download" => download(&args, &client, base_url, &api_key)?,
-                "search" => search(&args, &client, base_url, &api_key)?,
-                "delete" => delete(&args, &client, base_url, &api_key)?,
-                "list" => list_files(&client, base_url, &api_key)?,
-                _ => {} // Should never reach here
-            }
+            upload(&args, &client, base_url, &api_key)?
+        }
+        "download" => {
+            let api_key = load_api_key()?;
+            download(&args, &client, base_url, &api_key)?
+        }
+        "search" => {
+            let api_key = load_api_key()?;
+            search(&args, &client, base_url, &api_key)?
+        }
+        "delete" => {
+            let api_key = load_api_key()?;
+            delete(&args, &client, base_url, &api_key)?
+        }
+        "list" => {
+            let api_key = load_api_key()?;
+            list_files(&client, base_url, &api_key)?
         }
         _ => {
             println!("Invalid operator: {operator}");
