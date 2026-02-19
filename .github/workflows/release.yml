@@ -19,10 +19,12 @@ jobs:
         include:
           - arch: x64
             target: x86_64-unknown-linux-gnu
-            triplet: x86_64
+            deb_arch: amd64
+            rpm_arch: x86_64
           - arch: arm64
             target: aarch64-unknown-linux-gnu
-            triplet: aarch64
+            deb_arch: arm64
+            rpm_arch: aarch64
 
     steps:
       - uses: actions/checkout@v4
@@ -31,72 +33,74 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby-dev
+          sudo gem install fpm
 
-      - name: Build binary
-        run: cross build --release --target ${{ matrix.target }}
+      - name: Build binary with cross
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
+          cross build --release --target ${{ matrix.target }}
 
       - name: Copy binary
         run: |
           mkdir -p release
           cp target/${{ matrix.target }}/release/UDTool release/UDTool-linux-${{ matrix.arch }}
 
-      - name: Install build tools for DEB/RPM
+      - name: Extract version
+        id: version
         run: |
-          sudo apt-get update
-          cargo install cargo-deb cargo-rpm
-          sudo apt-get install -y ruby-dev > /dev/null 2>&1 || true
-          sudo gem install fpm > /dev/null 2>&1 || true
-
-      - name: Build binary with cross
-        run: |
-          cargo install cross
-          cross build --release --target ${{ matrix.target }}
+          VERSION="${{ github.ref_name }}"
+          VERSION=${VERSION#v}
+          if [[ "$VERSION" == "master" ]] || [[ "$VERSION" == "main" ]]; then
+            VERSION="1.0.0"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build DEB package
         run: |
-          mkdir -p release
-          # Use fpm to create DEB for both x64 and ARM64
           mkdir -p deb_build/usr/local/bin
           cp target/${{ matrix.target }}/release/UDTool deb_build/usr/local/bin/
-          cd release
-          fpm -s dir -t deb -n udtool -v 1.0.0 \
-            --architecture ${{ matrix.arch }} \
-            -C ../deb_build \
+          
+          fpm -s dir \
+            -t deb \
+            -n udtool \
+            -v ${{ steps.version.outputs.version }} \
+            -a ${{ matrix.deb_arch }} \
             --maintainer "Ari Cummings <ari@aricummings.com>" \
-            --description "Universal Data Tool - Manage files on remote server"
-          cd ..
+            --description "Universal Data Tool - Manage files on remote server" \
+            -C deb_build \
+            -p release/udtool_${{ steps.version.outputs.version }}-1_${{ matrix.deb_arch }}.deb \
+            usr/local/bin/UDTool
 
       - name: Build RPM package
         run: |
-          mkdir -p release
-          # Build RPM for both x64 and ARM64
           mkdir -p rpm_build/usr/local/bin
           cp target/${{ matrix.target }}/release/UDTool rpm_build/usr/local/bin/
           
-          # Set architecture based on matrix
-          if [ "${{ matrix.arch }}" = "x64" ]; then
-            RPM_ARCH="x86_64"
-          else
-            RPM_ARCH="aarch64"
-          fi
-          
-          cd release
-          fpm -s dir -t rpm \
+          fpm -s dir \
+            -t rpm \
             -n udtool \
-            -v 1.0.0 \
-            -a "$RPM_ARCH" \
-            --rpm-os linux \
-            -C ../rpm_build \
+            -v ${{ steps.version.outputs.version }} \
+            -a ${{ matrix.rpm_arch }} \
             --maintainer "Ari Cummings <ari@aricummings.com>" \
-            --description "Universal Data Tool - Manage files on remote server"
-          cd ..
+            --description "Universal Data Tool - Manage files on remote server" \
+            --rpm-os linux \
+            -C rpm_build \
+            -p release/udtool-${{ steps.version.outputs.version }}-1.${{ matrix.rpm_arch }}.rpm \
+            usr/local/bin/UDTool
 
       - name: Clean up empty files
         run: |
           # Remove any empty files (size 0) to avoid upload errors
           find release -type f -size 0 -delete || true
+
+      - name: List artifacts
+        run: |
+          echo "Created artifacts:"
+          ls -lah release/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -135,14 +139,19 @@ jobs:
             target/aarch64-apple-darwin/release/UDTool \
             -output release/UDTool-macos-universal
 
-      - name: Build PKG installer
+      - name: Extract version
+        id: version
         run: |
-          # Extract version from tag or use fallback
           VERSION="${{ github.ref_name }}"
+          VERSION=${VERSION#v}
           if [[ "$VERSION" == "master" ]] || [[ "$VERSION" == "main" ]]; then
             VERSION="1.0.0"
           fi
-          VERSION=${VERSION#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build PKG installer
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
           
           STAGING_DIR="pkg_staging"
           rm -rf "$STAGING_DIR"
@@ -205,6 +214,16 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path release -Force
           Copy-Item target/${{ matrix.target }}/release/UDTool.exe release/UDTool-windows-${{ matrix.arch }}.exe
+
+      - name: Extract version
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace 'v', ''
+          if ($version -eq "master" -or $version -eq "main") {
+            $version = "1.0.0"
+          }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$version"
 
       - name: Build MSI installer (WiX)
         run: |
@@ -270,11 +289,8 @@ jobs:
           
           Write-Host "Using WiX at: $wixPath"
           
-          # Extract version
-          $version = "${{ github.ref_name }}" -replace 'v', ''
-          if ($version -eq "master" -or $version -eq "main") {
-            $version = "1.0.0"
-          }
+          # Use version from previous step
+          $version = "${{ steps.version.outputs.version }}"
           
           # Create release directory
           New-Item -ItemType Directory -Path release -Force -ErrorAction SilentlyContinue | Out-Null
