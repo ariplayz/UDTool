@@ -378,6 +378,7 @@ fn main() -> std::io::Result<()> {
 
     let operator = &args[1];
     let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(25200))
         .build()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
