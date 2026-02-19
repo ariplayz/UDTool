@@ -23,7 +23,7 @@ A command-line tool written in Rust for managing files on a remote server with A
 
 ## Other Repositories
 - [**ASP.NET API**](https://github.com/ariplayz/UDToolAPI)
-- [**UDTool CLI**](https://github.com/ariplayz/UDTool)
+- [**UDTool Desktop**](https://github.com/ariplayz/UDTool-Desktop)
 
 ---
 
