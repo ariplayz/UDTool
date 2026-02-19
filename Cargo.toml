@@ -10,3 +10,4 @@ description = "Universal Data Tool - Manage files on remote server with API key 
 dirs = "6.0.0"
 reqwest = { version = "0.12", features = ["blocking", "json", "multipart", "rustls-tls"], default-features = false }
 serde_json = "1.0"
+indicatif = "0.17"

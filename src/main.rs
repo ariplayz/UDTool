@@ -111,8 +111,20 @@ fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str, a
 
     // Read the file
     let file_contents = fs::read(file_path)?;
+    let total_size = file_contents.len() as u64;
+
+    // Create progress bar
+    let pb = indicatif::ProgressBar::new(total_size);
+    pb.set_style(indicatif::ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+        .unwrap()
+        .progress_chars("#>-"));
 
     println!("Uploading {file_path}...");
+
+    // Simulate progress by incrementing the bar
+    // For upload, we'll increment it as we prepare the request
+    pb.inc(0);
 
     // Create multipart form with correct field name "file"
     let part = reqwest::blocking::multipart::Part::bytes(file_contents)
@@ -127,6 +139,8 @@ fn upload(args: &[String], client: &reqwest::blocking::Client, base_url: &str, a
         .multipart(form)
         .send()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    pb.finish_with_message("Upload complete");
 
     let status = res.status();
     if status.is_success() {
@@ -160,9 +174,23 @@ fn download(args: &[String], client: &reqwest::blocking::Client, base_url: &str,
 
     let status = res.status();
     if status.is_success() {
+        // Get content length for progress bar
+        let total_size = res.content_length().unwrap_or(0);
+
+        // Create progress bar
+        let pb = indicatif::ProgressBar::new(total_size);
+        pb.set_style(indicatif::ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+            .unwrap()
+            .progress_chars("#>-"));
+
+        // Read content and update progress
         let content = res.bytes().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        pb.inc(content.len() as u64);
+        pb.finish_with_message("Download complete");
+
         fs::write(file_name, &content)?;
-        println!("Downloaded {file_name}...");
+        println!("Downloaded {file_name} successfully.");
     } else {
         let body = res.text().unwrap_or_default();
         println!("Download failed with status: {status}");
@@ -285,7 +313,6 @@ fn main() -> std::io::Result<()> {
 
     let operator = &args[1];
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(2000))
         .build()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
